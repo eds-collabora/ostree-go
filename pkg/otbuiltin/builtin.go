@@ -52,6 +52,24 @@ func repoFromNative(or *C.OstreeRepo) *Repo {
 	return r
 }
 
+func (repo *Repo) ResolveRev(refspec string, allowNoent bool) (string, error) {
+	var cerr *C.GError = nil
+	var coutrev *C.char = nil
+
+	crefspec := C.CString(refspec)
+	defer C.free(unsafe.Pointer(crefspec))
+
+	r := C.ostree_repo_resolve_rev(repo.native(), crefspec, (C.gboolean)(glib.GBool(allowNoent)), &coutrev, &cerr)
+	if !gobool(r) {
+		return "", generateError(cerr)
+	}
+
+	outrev := C.GoString(coutrev)
+	C.free(unsafe.Pointer(coutrev))
+
+	return outrev, nil
+}
+
 // OpenRepo attempts to open the repo at the given path
 func OpenRepo(path string) (*Repo, error) {
 	if path == "" {
@@ -72,6 +90,56 @@ func OpenRepo(path string) (*Repo, error) {
 	}
 
 	return repo, nil
+}
+
+type PullOptions struct {
+	OverrideRemoteName string
+	Refs               []string
+}
+
+func (repo *Repo) PullWithOptions(remoteName string, options PullOptions, progress *AsyncProgress, cancellable *glib.GCancellable) error {
+	var cerr *C.GError = nil
+
+	cremoteName := C.CString(remoteName)
+	defer C.free(unsafe.Pointer(cremoteName))
+
+	builder := C.g_variant_builder_new(C._g_variant_type(C.CString("a{sv}")))
+	if options.OverrideRemoteName != "" {
+		cstr := C.CString(options.OverrideRemoteName)
+		v := C.g_variant_new_take_string((*C.gchar)(cstr))
+		k := C.CString("override-remote-name")
+		defer C.free(unsafe.Pointer(k))
+		C._g_variant_builder_add_twoargs(builder, C.CString("{sv}"), k, v)
+	}
+
+	if len(options.Refs) != 0 {
+		crefs := make([]*C.gchar, len(options.Refs))
+		for i, s := range options.Refs {
+			crefs[i] = (*C.gchar)(C.CString(s))
+		}
+
+		v := C.g_variant_new_strv((**C.gchar)(&crefs[0]), (C.gssize)(len(crefs)))
+
+		for i, s := range crefs {
+			crefs[i] = nil
+			C.free(unsafe.Pointer(s))
+		}
+
+		k := C.CString("refs")
+		defer C.free(unsafe.Pointer(k))
+
+		C._g_variant_builder_add_twoargs(builder, C.CString("{sv}"), k, v)
+	}
+
+	coptions := C.g_variant_builder_end(builder)
+
+	r := C.ostree_repo_pull_with_options(repo.native(), cremoteName, coptions, progress.native(), cCancellable(cancellable), &cerr)
+
+	if !gobool(r) {
+		return generateError(cerr)
+	}
+
+	return nil
 }
 
 // enableTombstoneCommits enables support for tombstone commits.
