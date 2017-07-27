@@ -23,6 +23,10 @@ type Repo struct {
 	ptr unsafe.Pointer
 }
 
+func cCancellable(c *glib.GCancellable) *C.GCancellable {
+	return (*C.GCancellable)(c.Ptr())
+}
+
 // isInitialized checks if the repo has been initialized
 func (r *Repo) isInitialized() bool {
 	if r == nil || r.ptr == nil {
