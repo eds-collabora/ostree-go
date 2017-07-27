@@ -117,3 +117,18 @@ func generateError(err *C.GError) error {
 func isOk(v C.gboolean) bool {
 	return glib.GoBool(glib.GBoolean(v))
 }
+
+func gobool(b C.gboolean) bool {
+	return b != C.FALSE
+}
+
+type AsyncProgress struct {
+	*glib.Object
+}
+
+func (a *AsyncProgress) native() *C.OstreeAsyncProgress {
+	if a == nil {
+		return nil
+	}
+	return (*C.OstreeAsyncProgress)(a.Ptr())
+}
