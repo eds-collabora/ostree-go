@@ -20,12 +20,12 @@ import "C"
 
 // Repo represents a local ostree repository
 type Repo struct {
-	ptr unsafe.Pointer
+	*glib.Object
 }
 
 // isInitialized checks if the repo has been initialized
 func (r *Repo) isInitialized() bool {
-	if r == nil || r.ptr == nil {
+	if r == nil || r.GObject == nil {
 		return false
 	}
 	return true
@@ -36,7 +36,7 @@ func (r *Repo) native() *C.OstreeRepo {
 	if !r.isInitialized() {
 		return nil
 	}
-	return (*C.OstreeRepo)(r.ptr)
+	return (*C.OstreeRepo)(unsafe.Pointer(r.GObject))
 }
 
 // repoFromNative takes a C ostree repo and converts it to a Go struct
@@ -44,8 +44,13 @@ func repoFromNative(or *C.OstreeRepo) *Repo {
 	if or == nil {
 		return nil
 	}
-	r := &Repo{unsafe.Pointer(or)}
-	return r
+	g := glib.ToGObject(unsafe.Pointer(or))
+	obj := &glib.Object{g}
+	repo := &Repo{obj}
+
+	runtime.SetFinalizer(repo, (*Repo).Unref)
+
+	return repo
 }
 
 // OpenRepo attempts to open the repo at the given path
